@@ -1,3 +1,9 @@
 spring:
   application:
     name: event-log-pipeline
+  profiles:
+    default: generator
+
+event-generator:
+  count: 1000
+  seed: 20260615
