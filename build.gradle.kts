@@ -22,6 +22,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-jdbc-test")
+    testImplementation("org.mockito:mockito-core")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
