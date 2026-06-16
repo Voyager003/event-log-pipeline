@@ -1,0 +1,86 @@
+{
+  "id": null,
+  "uid": "event-log-overview",
+  "title": "Event Log Overview",
+  "tags": ["event-log", "liveklass"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Event Type Distribution",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT event_type, COUNT(*) AS event_count FROM event_logs GROUP BY event_type ORDER BY event_count DESC;"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 2,
+      "title": "Hourly Event Trends",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', occurred_at) AS time, event_type AS metric, COUNT(*) AS value FROM event_logs GROUP BY 1, 2 ORDER BY 1, 2;"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Purchase Click to Request Funnel",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "WITH purchase_clicks AS ( SELECT e.user_id, e.session_id, c.course_id, MIN(e.occurred_at) AS first_clicked_at FROM event_logs e JOIN click_event_details c ON c.event_id = e.event_id WHERE c.component_name = 'purchase_submit' GROUP BY e.user_id, e.session_id, c.course_id ), purchase_requests AS ( SELECT e.user_id, e.session_id, r.course_id, MIN(e.occurred_at) AS first_requested_at FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE r.request_name = 'purchase_course' GROUP BY e.user_id, e.session_id, r.course_id ) SELECT COUNT(*) AS purchase_button_clicks, COUNT(pr.first_requested_at) AS purchase_requests, ROUND(COUNT(pr.first_requested_at)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS click_to_request_rate FROM purchase_clicks pc LEFT JOIN purchase_requests pr ON pr.user_id = pc.user_id AND pr.session_id = pc.session_id AND pr.course_id = pc.course_id AND pr.first_requested_at >= pc.first_clicked_at;"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      }
+    },
+    {
+      "id": 4,
+      "title": "Request Failure Rate",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT ROUND(COUNT(*) FILTER (WHERE http_status >= 400)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS failure_rate FROM request_event_details;"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    }
+  ]
+}

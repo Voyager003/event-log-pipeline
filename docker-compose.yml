@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: event-log-postgres
+    environment:
+      POSTGRES_DB: event_log_pipeline
+      POSTGRES_USER: event_log_app
+      POSTGRES_PASSWORD: event_log_pw
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  db-reset:
+    image: postgres:16-alpine
+    container_name: event-log-db-reset
+    environment:
+      PGPASSWORD: event_log_pw
+    command:
+      [
+        "sh",
+        "-c",
+        "psql -h db -U event_log_app -d event_log_pipeline -c 'DROP TABLE IF EXISTS auth_event_details, request_event_details, click_event_details, view_event_details, event_logs CASCADE;'"
+      ]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: event-log-app
+    environment:
+      SPRING_PROFILES_ACTIVE: db
+      EVENT_LOG_DB_URL: jdbc:postgresql://db:5432/event_log_pipeline
+      EVENT_LOG_DB_USERNAME: event_log_app
+      EVENT_LOG_DB_PASSWORD: event_log_pw
+    depends_on:
+      db-reset:
+        condition: service_completed_successfully
+
+  grafana:
+    image: grafana/grafana-oss:11.5.0
+    container_name: event-log-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      EVENT_LOG_DB_HOST: db
+      EVENT_LOG_DB_PORT: "5432"
+      EVENT_LOG_DB_NAME: event_log_pipeline
+      EVENT_LOG_DB_USERNAME: event_log_app
+      EVENT_LOG_DB_PASSWORD: event_log_pw
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:
+  grafana-data:

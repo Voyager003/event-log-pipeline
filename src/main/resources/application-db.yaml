@@ -1,6 +1,4 @@
 spring:
-  config:
-    import: optional:file:.env[.properties]
   datasource:
     url: ${EVENT_LOG_DB_URL:jdbc:postgresql://localhost:5432/event_log_pipeline}
     username: ${EVENT_LOG_DB_USERNAME:event_log_app}

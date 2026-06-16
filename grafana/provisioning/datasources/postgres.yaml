@@ -1,0 +1,16 @@
+apiVersion: 1
+
+datasources:
+  - name: Event Log PostgreSQL
+    uid: event-log-postgres
+    type: postgres
+    access: proxy
+    url: ${EVENT_LOG_DB_HOST}:${EVENT_LOG_DB_PORT}
+    user: ${EVENT_LOG_DB_USERNAME}
+    secureJsonData:
+      password: ${EVENT_LOG_DB_PASSWORD}
+    jsonData:
+      database: ${EVENT_LOG_DB_NAME}
+      sslmode: disable
+      timeInterval: 1m
+    editable: false
