@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.EnumSet;
+import java.util.Comparator;
 
 import org.junit.jupiter.api.Test;
 
@@ -56,15 +57,50 @@ class EventGeneratorTests {
     }
 
     @Test
-    void mapsWebAndServerSourcesFromEventType() {
+    void mapsWebAndServerSourcesFromBusinessEventType() {
         var events = eventGenerator.generate(1_000, 20260615L);
 
         assertThat(events)
-                .filteredOn(event -> event.eventType() == EventType.REQUEST)
+                .filteredOn(event -> event.eventType() == EventType.PURCHASE_COMPLETED
+                        || event.eventType() == EventType.PURCHASE_FAILED)
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.SERVER));
         assertThat(events)
-                .filteredOn(event -> event.eventType() != EventType.REQUEST)
+                .filteredOn(event -> event.eventType() != EventType.PURCHASE_COMPLETED
+                        && event.eventType() != EventType.PURCHASE_FAILED)
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.WEB));
+    }
+
+    @Test
+    void createsPurchaseJourneyEventsWithinSameSessionAndCourse() {
+        var events = eventGenerator.generate(1_000, 20260615L);
+
+        var completedPurchase = events.stream()
+                .filter(event -> event.eventType() == EventType.PURCHASE_COMPLETED)
+                .findFirst()
+                .orElseThrow();
+        var requestDetail = (EventDetail.Request) completedPurchase.detail();
+
+        var journeyEvents = events.stream()
+                .filter(event -> event.userId().equals(completedPurchase.userId()))
+                .filter(event -> event.sessionId().equals(completedPurchase.sessionId()))
+                .filter(event -> hasCourseId(event, requestDetail.courseId()))
+                .sorted(Comparator.comparing(GeneratedEvent::occurredAt))
+                .toList();
+
+        assertThat(journeyEvents)
+                .extracting(GeneratedEvent::eventType)
+                .containsSubsequence(
+                        EventType.COURSE_DETAIL_VIEWED,
+                        EventType.CHECKOUT_OPENED,
+                        EventType.PURCHASE_SUBMITTED,
+                        EventType.PURCHASE_COMPLETED
+                );
+    }
+
+    @Test
+    void exposesReadableSnakeCaseEventNamesForStorageAndAnalytics() {
+        assertThat(EventType.COURSE_DETAIL_VIEWED.eventName()).isEqualTo("course_detail_viewed");
+        assertThat(EventType.PURCHASE_COMPLETED.eventName()).isEqualTo("purchase_completed");
     }
 
     @Test
@@ -80,5 +116,15 @@ class EventGeneratorTests {
         assertThatThrownBy(() -> eventGenerator.generate(-1, 20260615L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("count must be greater than or equal to 0");
+    }
+
+    private boolean hasCourseId(GeneratedEvent event, String courseId) {
+        return switch (event.detail()) {
+            case EventDetail.View view -> courseId.equals(view.courseId());
+            case EventDetail.Click click -> courseId.equals(click.courseId());
+            case EventDetail.Request request -> courseId.equals(request.courseId());
+            case EventDetail.Login ignored -> false;
+            case EventDetail.Logout ignored -> false;
+        };
     }
 }

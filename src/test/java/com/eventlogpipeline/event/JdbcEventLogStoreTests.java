@@ -27,10 +27,12 @@ class JdbcEventLogStoreTests {
 
         assertThat(savedCount).isEqualTo(1_000);
         verify(jdbcTemplate, times(1_000)).update(contains("INSERT INTO event_logs"), anyMap());
-        verify(jdbcTemplate, times(354)).update(contains("INSERT INTO view_event_details"), anyMap());
-        verify(jdbcTemplate, times(254)).update(contains("INSERT INTO click_event_details"), anyMap());
-        verify(jdbcTemplate, times(213)).update(contains("INSERT INTO request_event_details"), anyMap());
-        verify(jdbcTemplate, times(179)).update(contains("INSERT INTO auth_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.View.class)))
+                .update(contains("INSERT INTO view_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.Click.class)))
+                .update(contains("INSERT INTO click_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.Request.class)))
+                .update(contains("INSERT INTO request_event_details"), anyMap());
     }
 
     @Test
@@ -46,7 +48,7 @@ class JdbcEventLogStoreTests {
 
         assertThat(paramsCaptor.getValue())
                 .containsEntry("eventId", event.eventId())
-                .containsEntry("eventType", event.eventType().name())
+                .containsEntry("eventType", event.eventType().eventName())
                 .containsEntry("source", event.source().name())
                 .containsEntry("schemaVersion", event.schemaVersion())
                 .containsEntry("userId", event.userId())
@@ -54,5 +56,12 @@ class JdbcEventLogStoreTests {
                 .containsEntry("lifetimePurchaseCount", event.userProperties().lifetimePurchaseCount())
                 .containsEntry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount())
                 .containsEntry("abTestGroup", event.userProperties().abTestGroup());
+    }
+
+    private int countDetails(List<GeneratedEvent> events, Class<? extends EventDetail> detailType) {
+        return (int) events.stream()
+                .map(GeneratedEvent::detail)
+                .filter(detailType::isInstance)
+                .count();
     }
 }

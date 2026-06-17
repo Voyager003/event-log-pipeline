@@ -13,9 +13,10 @@ class AnalyticsQueryTests {
 
     private static final List<String> ANALYTICS_QUERIES = List.of(
             "analytics/event_type_counts.sql",
-            "analytics/hourly_event_trends.sql",
-            "analytics/purchase_click_to_request_funnel.sql",
-            "analytics/request_failure_rate.sql"
+            "analytics/course_purchase_funnel.sql",
+            "analytics/ab_test_purchase_conversion.sql",
+            "analytics/traffic_source_purchase_conversion.sql",
+            "analytics/purchase_failure_rate.sql"
     );
 
     @Test
@@ -36,23 +37,40 @@ class AnalyticsQueryTests {
     }
 
     @Test
-    void funnelQueryUsesClickAndRequestDetailTables() throws IOException {
-        String sql = readSql("analytics/purchase_click_to_request_funnel.sql");
+    void funnelQueryUsesJourneyIdentifiersAndBusinessEvents() throws IOException {
+        String sql = readSql("analytics/course_purchase_funnel.sql");
 
         assertThat(sql)
-                .contains("click_event_details")
-                .contains("request_event_details")
-                .contains("purchase_submit")
-                .contains("purchase_course");
+                .contains("user_id")
+                .contains("session_id")
+                .contains("course_id")
+                .contains("course_detail_viewed")
+                .contains("checkout_opened")
+                .contains("purchase_submitted")
+                .contains("purchase_completed");
     }
 
     @Test
-    void timeSeriesQueryUsesHourlyBuckets() throws IOException {
-        String sql = readSql("analytics/hourly_event_trends.sql");
+    void segmentQueriesUseUserPropertiesAndAcquisitionContext() throws IOException {
+        String abTestSql = readSql("analytics/ab_test_purchase_conversion.sql");
+        String trafficSourceSql = readSql("analytics/traffic_source_purchase_conversion.sql");
+
+        assertThat(abTestSql)
+                .contains("ab_test_group")
+                .contains("purchase_completed");
+        assertThat(trafficSourceSql)
+                .contains("traffic_source")
+                .contains("purchase_completed");
+    }
+
+    @Test
+    void failureQueryUsesPurchaseFailureDetails() throws IOException {
+        String sql = readSql("analytics/purchase_failure_rate.sql");
 
         assertThat(sql)
-                .contains("date_trunc('hour', occurred_at)")
-                .contains("GROUP BY event_hour, event_type");
+                .contains("request_event_details")
+                .contains("purchase_failed")
+                .contains("failure_reason");
     }
 
     private String readSql(String path) throws IOException {
