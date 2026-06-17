@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.EnumSet;
 import java.util.Comparator;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
@@ -95,6 +96,48 @@ class EventGeneratorTests {
                         EventType.PURCHASE_SUBMITTED,
                         EventType.PURCHASE_COMPLETED
                 );
+    }
+
+    @Test
+    void generatesRealisticPurchaseFunnelDistribution() {
+        var counts = eventGenerator.generate(1_000, 20260615L).stream()
+                .collect(Collectors.groupingBy(GeneratedEvent::eventType, Collectors.counting()));
+
+        long courseViews = counts.getOrDefault(EventType.COURSE_DETAIL_VIEWED, 0L);
+        long previewStarts = counts.getOrDefault(EventType.PREVIEW_STARTED, 0L);
+        long checkoutOpens = counts.getOrDefault(EventType.CHECKOUT_OPENED, 0L);
+        long purchaseSubmits = counts.getOrDefault(EventType.PURCHASE_SUBMITTED, 0L);
+        long purchaseCompletions = counts.getOrDefault(EventType.PURCHASE_COMPLETED, 0L);
+        long purchaseFailures = counts.getOrDefault(EventType.PURCHASE_FAILED, 0L);
+
+        assertThat(courseViews).isGreaterThan(previewStarts);
+        assertThat(previewStarts).isGreaterThan(checkoutOpens);
+        assertThat(checkoutOpens).isGreaterThan(purchaseSubmits);
+        assertThat(purchaseSubmits).isGreaterThan(purchaseCompletions);
+        assertThat(purchaseFailures).isGreaterThan(0);
+        assertThat(purchaseCompletions + purchaseFailures).isEqualTo(purchaseSubmits);
+    }
+
+    @Test
+    void generatesPurchaseResultsOnlyAfterSubmittedEvent() {
+        var events = eventGenerator.generate(1_000, 20260615L);
+
+        var purchaseResults = events.stream()
+                .filter(event -> event.eventType() == EventType.PURCHASE_COMPLETED
+                        || event.eventType() == EventType.PURCHASE_FAILED)
+                .toList();
+
+        assertThat(purchaseResults).allSatisfy(result -> {
+            var resultDetail = (EventDetail.Request) result.detail();
+            assertThat(events)
+                    .filteredOn(event -> event.userId().equals(result.userId()))
+                    .filteredOn(event -> event.sessionId().equals(result.sessionId()))
+                    .filteredOn(event -> hasCourseId(event, resultDetail.courseId()))
+                    .filteredOn(event -> event.eventType() == EventType.PURCHASE_SUBMITTED)
+                    .filteredOn(event -> event.occurredAt().isBefore(result.occurredAt())
+                            || event.occurredAt().equals(result.occurredAt()))
+                    .hasSize(1);
+        });
     }
 
     @Test

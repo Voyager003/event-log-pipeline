@@ -21,6 +21,10 @@ public class EventGenerator {
     private static final String[] PAYMENT_METHODS = {"card", "kakao_pay", "naver_pay"};
     private static final String[] FAILURE_REASONS = {"card_declined", "insufficient_funds", "payment_timeout"};
     private static final String SCHEMA_VERSION = "1.0";
+    private static final int PREVIEW_START_RATE = 60;
+    private static final int CHECKOUT_OPEN_RATE = 45;
+    private static final int PURCHASE_SUBMIT_RATE = 78;
+    private static final int PURCHASE_SUCCESS_RATE = 85;
 
     public List<GeneratedEvent> generate(int count, long seed) {
         if (count < 0) {
@@ -95,7 +99,7 @@ public class EventGenerator {
                         coursePrice
                 ));
 
-        if (random.nextInt(100) < 62) {
+        if (random.nextInt(100) < PREVIEW_START_RATE) {
             eventTime = eventTime.plus(1 + random.nextInt(4), ChronoUnit.MINUTES);
             eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.PREVIEW_STARTED,
                     eventTime,
@@ -113,7 +117,7 @@ public class EventGenerator {
                     ));
         }
 
-        if (random.nextInt(100) >= 72) {
+        if (random.nextInt(100) >= CHECKOUT_OPEN_RATE) {
             return eventNumber;
         }
 
@@ -133,7 +137,7 @@ public class EventGenerator {
                         ""
                 ));
 
-        if (random.nextInt(100) >= 78) {
+        if (random.nextInt(100) >= PURCHASE_SUBMIT_RATE) {
             return eventNumber;
         }
 
@@ -154,7 +158,7 @@ public class EventGenerator {
                         "KRW"
                 ));
 
-        boolean successfulPurchase = random.nextInt(100) < 82;
+        boolean successfulPurchase = random.nextInt(100) < PURCHASE_SUCCESS_RATE;
         String requestId = formatId("request", eventNumber);
         EventType requestEventType = successfulPurchase ? EventType.PURCHASE_COMPLETED : EventType.PURCHASE_FAILED;
         int httpStatus = successfulPurchase ? 201 : 402;
