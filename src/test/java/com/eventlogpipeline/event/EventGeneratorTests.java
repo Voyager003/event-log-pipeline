@@ -43,12 +43,10 @@ class EventGeneratorTests {
             assertThat(event.anonymousId()).isNotBlank();
             assertThat(event.sessionId()).isNotBlank();
             assertThat(event.deviceType()).isNotBlank();
-            assertThat(event.trafficSource()).isNotBlank();
             assertThat(event.userProperties()).isNotNull();
             assertThat(event.userProperties().membershipLevel()).isNotBlank();
             assertThat(event.userProperties().lifetimePurchaseCount()).isGreaterThanOrEqualTo(0);
             assertThat(event.userProperties().lifetimePurchaseAmount()).isNotNull();
-            assertThat(event.userProperties().abTestGroup()).isNotBlank();
             assertThat(event.detail()).isNotNull();
         });
 
@@ -62,17 +60,15 @@ class EventGeneratorTests {
         var events = eventGenerator.generate(1_000, 20260615L);
 
         assertThat(events)
-                .filteredOn(event -> event.eventType() == EventType.PURCHASE_COMPLETED
-                        || event.eventType() == EventType.PURCHASE_FAILED)
+                .filteredOn(event -> event.eventType() == EventType.PURCHASE_COMPLETED)
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.SERVER));
         assertThat(events)
-                .filteredOn(event -> event.eventType() != EventType.PURCHASE_COMPLETED
-                        && event.eventType() != EventType.PURCHASE_FAILED)
+                .filteredOn(event -> event.eventType() != EventType.PURCHASE_COMPLETED)
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.WEB));
     }
 
     @Test
-    void createsPurchaseJourneyEventsWithinSameSessionAndCourse() {
+    void createsPreviewDrivenPurchaseJourneyWithinSameSessionAndCourse() {
         var events = eventGenerator.generate(1_000, 20260615L);
 
         var completedPurchase = events.stream()
@@ -92,6 +88,8 @@ class EventGeneratorTests {
                 .extracting(GeneratedEvent::eventType)
                 .containsSubsequence(
                         EventType.COURSE_DETAIL_VIEWED,
+                        EventType.PREVIEW_STARTED,
+                        EventType.PREVIEW_COMPLETED,
                         EventType.CHECKOUT_OPENED,
                         EventType.PURCHASE_SUBMITTED,
                         EventType.PURCHASE_COMPLETED
@@ -105,26 +103,24 @@ class EventGeneratorTests {
 
         long courseViews = counts.getOrDefault(EventType.COURSE_DETAIL_VIEWED, 0L);
         long previewStarts = counts.getOrDefault(EventType.PREVIEW_STARTED, 0L);
+        long previewCompletions = counts.getOrDefault(EventType.PREVIEW_COMPLETED, 0L);
         long checkoutOpens = counts.getOrDefault(EventType.CHECKOUT_OPENED, 0L);
         long purchaseSubmits = counts.getOrDefault(EventType.PURCHASE_SUBMITTED, 0L);
         long purchaseCompletions = counts.getOrDefault(EventType.PURCHASE_COMPLETED, 0L);
-        long purchaseFailures = counts.getOrDefault(EventType.PURCHASE_FAILED, 0L);
 
         assertThat(courseViews).isGreaterThan(previewStarts);
-        assertThat(previewStarts).isGreaterThan(checkoutOpens);
+        assertThat(previewStarts).isGreaterThan(previewCompletions);
+        assertThat(previewCompletions).isGreaterThan(checkoutOpens);
         assertThat(checkoutOpens).isGreaterThan(purchaseSubmits);
         assertThat(purchaseSubmits).isGreaterThan(purchaseCompletions);
-        assertThat(purchaseFailures).isGreaterThan(0);
-        assertThat(purchaseCompletions + purchaseFailures).isEqualTo(purchaseSubmits);
     }
 
     @Test
-    void generatesPurchaseResultsOnlyAfterSubmittedEvent() {
+    void generatesPurchaseCompletedOnlyAfterSubmittedEvent() {
         var events = eventGenerator.generate(1_000, 20260615L);
 
         var purchaseResults = events.stream()
-                .filter(event -> event.eventType() == EventType.PURCHASE_COMPLETED
-                        || event.eventType() == EventType.PURCHASE_FAILED)
+                .filter(event -> event.eventType() == EventType.PURCHASE_COMPLETED)
                 .toList();
 
         assertThat(purchaseResults).allSatisfy(result -> {
@@ -143,6 +139,7 @@ class EventGeneratorTests {
     @Test
     void exposesReadableSnakeCaseEventNamesForStorageAndAnalytics() {
         assertThat(EventType.COURSE_DETAIL_VIEWED.eventName()).isEqualTo("course_detail_viewed");
+        assertThat(EventType.PREVIEW_COMPLETED.eventName()).isEqualTo("preview_completed");
         assertThat(EventType.PURCHASE_COMPLETED.eventName()).isEqualTo("purchase_completed");
     }
 
@@ -165,6 +162,7 @@ class EventGeneratorTests {
         return switch (event.detail()) {
             case EventDetail.View view -> courseId.equals(view.courseId());
             case EventDetail.Click click -> courseId.equals(click.courseId());
+            case EventDetail.Preview preview -> courseId.equals(preview.courseId());
             case EventDetail.Request request -> courseId.equals(request.courseId());
             case EventDetail.Login ignored -> false;
             case EventDetail.Logout ignored -> false;

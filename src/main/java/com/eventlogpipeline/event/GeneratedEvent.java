@@ -12,7 +12,6 @@ public record GeneratedEvent(
         String anonymousId,
         String sessionId,
         String deviceType,
-        String trafficSource,
         UserProperties userProperties,
         EventDetail detail
 ) {

@@ -8,11 +8,9 @@ CREATE TABLE IF NOT EXISTS event_logs (
     anonymous_id text NOT NULL,
     session_id text NOT NULL,
     device_type text NOT NULL,
-    traffic_source text NOT NULL,
     membership_level text NOT NULL,
     lifetime_purchase_count integer NOT NULL,
-    lifetime_purchase_amount numeric(12, 2) NOT NULL,
-    ab_test_group text NOT NULL
+    lifetime_purchase_amount numeric(12, 2) NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_logs_event_type ON event_logs (event_type);
@@ -43,6 +41,19 @@ CREATE TABLE IF NOT EXISTS click_event_details (
     currency text
 );
 
+CREATE TABLE IF NOT EXISTS preview_event_details (
+    event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
+    page_name text NOT NULL,
+    page_url text NOT NULL,
+    course_id text NOT NULL,
+    creator_id text NOT NULL,
+    preview_id text NOT NULL,
+    preview_title text NOT NULL,
+    preview_length_seconds integer NOT NULL,
+    watched_seconds integer NOT NULL,
+    completion_rate numeric(5, 2) NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS request_event_details (
     event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
     api_method text NOT NULL,
@@ -55,8 +66,7 @@ CREATE TABLE IF NOT EXISTS request_event_details (
     creator_id text,
     amount numeric(12, 2),
     currency text,
-    payment_method text,
-    failure_reason text
+    payment_method text
 );
 
 CREATE TABLE IF NOT EXISTS auth_event_details (

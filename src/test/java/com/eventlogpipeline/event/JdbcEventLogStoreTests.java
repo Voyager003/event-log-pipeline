@@ -29,6 +29,8 @@ class JdbcEventLogStoreTests {
         verify(jdbcTemplate, times(1_000)).update(contains("INSERT INTO event_logs"), anyMap());
         verify(jdbcTemplate, times(countDetails(events, EventDetail.View.class)))
                 .update(contains("INSERT INTO view_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.Preview.class)))
+                .update(contains("INSERT INTO preview_event_details"), anyMap());
         verify(jdbcTemplate, times(countDetails(events, EventDetail.Click.class)))
                 .update(contains("INSERT INTO click_event_details"), anyMap());
         verify(jdbcTemplate, times(countDetails(events, EventDetail.Request.class)))
@@ -54,8 +56,7 @@ class JdbcEventLogStoreTests {
                 .containsEntry("userId", event.userId())
                 .containsEntry("membershipLevel", event.userProperties().membershipLevel())
                 .containsEntry("lifetimePurchaseCount", event.userProperties().lifetimePurchaseCount())
-                .containsEntry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount())
-                .containsEntry("abTestGroup", event.userProperties().abTestGroup());
+                .containsEntry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount());
     }
 
     private int countDetails(List<GeneratedEvent> events, Class<? extends EventDetail> detailType) {

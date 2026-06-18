@@ -45,11 +45,9 @@ public class JdbcEventLogStore implements EventLogStore {
                     anonymous_id,
                     session_id,
                     device_type,
-                    traffic_source,
                     membership_level,
                     lifetime_purchase_count,
-                    lifetime_purchase_amount,
-                    ab_test_group
+                    lifetime_purchase_amount
                 ) VALUES (
                     :eventId,
                     :eventType,
@@ -60,11 +58,9 @@ public class JdbcEventLogStore implements EventLogStore {
                     :anonymousId,
                     :sessionId,
                     :deviceType,
-                    :trafficSource,
                     :membershipLevel,
                     :lifetimePurchaseCount,
-                    :lifetimePurchaseAmount,
-                    :abTestGroup
+                    :lifetimePurchaseAmount
                 )
                 """, Map.ofEntries(
                 Map.entry("eventId", event.eventId()),
@@ -76,11 +72,9 @@ public class JdbcEventLogStore implements EventLogStore {
                 Map.entry("anonymousId", event.anonymousId()),
                 Map.entry("sessionId", event.sessionId()),
                 Map.entry("deviceType", event.deviceType()),
-                Map.entry("trafficSource", event.trafficSource()),
                 Map.entry("membershipLevel", event.userProperties().membershipLevel()),
                 Map.entry("lifetimePurchaseCount", event.userProperties().lifetimePurchaseCount()),
-                Map.entry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount()),
-                Map.entry("abTestGroup", event.userProperties().abTestGroup())
+                Map.entry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount())
         ));
     }
 
@@ -88,6 +82,7 @@ public class JdbcEventLogStore implements EventLogStore {
         switch (event.detail()) {
             case EventDetail.Login login -> saveAuthDetail(event.eventId(), login.authProvider(), login.pageUrl());
             case EventDetail.View view -> saveViewDetail(event.eventId(), view);
+            case EventDetail.Preview preview -> savePreviewDetail(event.eventId(), preview);
             case EventDetail.Click click -> saveClickDetail(event.eventId(), click);
             case EventDetail.Request request -> saveRequestDetail(event.eventId(), request);
             case EventDetail.Logout logout -> saveAuthDetail(event.eventId(), logout.authProvider(), logout.pageUrl());
@@ -100,116 +95,152 @@ public class JdbcEventLogStore implements EventLogStore {
                     event_id,
                     page_name,
                     page_url,
-	                    referrer,
-	                    course_id,
-	                    creator_id,
-	                    course_price
-	                ) VALUES (
-	                    :eventId,
-	                    :pageName,
-	                    :pageUrl,
-	                    :referrer,
-	                    :courseId,
-	                    :creatorId,
-	                    :coursePrice
-	                )
-	                """, Map.of(
-	                "eventId", eventId,
-	                "pageName", detail.pageName(),
-	                "pageUrl", detail.pageUrl(),
-	                "referrer", detail.referrer(),
-	                "courseId", detail.courseId(),
-	                "creatorId", detail.creatorId(),
-	                "coursePrice", detail.coursePrice()
-	        ));
-	    }
+                    referrer,
+                    course_id,
+                    creator_id,
+                    course_price
+                ) VALUES (
+                    :eventId,
+                    :pageName,
+                    :pageUrl,
+                    :referrer,
+                    :courseId,
+                    :creatorId,
+                    :coursePrice
+                )
+                """, Map.of(
+                "eventId", eventId,
+                "pageName", detail.pageName(),
+                "pageUrl", detail.pageUrl(),
+                "referrer", detail.referrer(),
+                "courseId", detail.courseId(),
+                "creatorId", detail.creatorId(),
+                "coursePrice", detail.coursePrice()
+        ));
+    }
+
+    private void savePreviewDetail(String eventId, EventDetail.Preview detail) {
+        jdbcTemplate.update("""
+                INSERT INTO preview_event_details (
+                    event_id,
+                    page_name,
+                    page_url,
+                    course_id,
+                    creator_id,
+                    preview_id,
+                    preview_title,
+                    preview_length_seconds,
+                    watched_seconds,
+                    completion_rate
+                ) VALUES (
+                    :eventId,
+                    :pageName,
+                    :pageUrl,
+                    :courseId,
+                    :creatorId,
+                    :previewId,
+                    :previewTitle,
+                    :previewLengthSeconds,
+                    :watchedSeconds,
+                    :completionRate
+                )
+                """, Map.of(
+                "eventId", eventId,
+                "pageName", detail.pageName(),
+                "pageUrl", detail.pageUrl(),
+                "courseId", detail.courseId(),
+                "creatorId", detail.creatorId(),
+                "previewId", detail.previewId(),
+                "previewTitle", detail.previewTitle(),
+                "previewLengthSeconds", detail.previewLengthSeconds(),
+                "watchedSeconds", detail.watchedSeconds(),
+                "completionRate", detail.completionRate()
+        ));
+    }
 
     private void saveClickDetail(String eventId, EventDetail.Click detail) {
         jdbcTemplate.update("""
                 INSERT INTO click_event_details (
                     event_id,
                     page_name,
-	                    page_url,
-	                    component_name,
-	                    component_type,
-	                    course_id,
-	                    creator_id,
-	                    payment_method,
-	                    amount,
-	                    currency
-	                ) VALUES (
-	                    :eventId,
-	                    :pageName,
-	                    :pageUrl,
-	                    :componentName,
-	                    :componentType,
-	                    :courseId,
-	                    :creatorId,
-	                    :paymentMethod,
-	                    :amount,
-	                    :currency
-	                )
-	                """, Map.of(
-	                "eventId", eventId,
-	                "pageName", detail.pageName(),
-	                "pageUrl", detail.pageUrl(),
-	                "componentName", detail.componentName(),
-	                "componentType", detail.componentType(),
-	                "courseId", detail.courseId(),
-	                "creatorId", detail.creatorId(),
-	                "paymentMethod", detail.paymentMethod(),
-	                "amount", detail.amount(),
-	                "currency", detail.currency()
-	        ));
-	    }
+                    page_url,
+                    component_name,
+                    component_type,
+                    course_id,
+                    creator_id,
+                    payment_method,
+                    amount,
+                    currency
+                ) VALUES (
+                    :eventId,
+                    :pageName,
+                    :pageUrl,
+                    :componentName,
+                    :componentType,
+                    :courseId,
+                    :creatorId,
+                    :paymentMethod,
+                    :amount,
+                    :currency
+                )
+                """, Map.of(
+                "eventId", eventId,
+                "pageName", detail.pageName(),
+                "pageUrl", detail.pageUrl(),
+                "componentName", detail.componentName(),
+                "componentType", detail.componentType(),
+                "courseId", detail.courseId(),
+                "creatorId", detail.creatorId(),
+                "paymentMethod", detail.paymentMethod(),
+                "amount", detail.amount(),
+                "currency", detail.currency()
+        ));
+    }
 
     private void saveRequestDetail(String eventId, EventDetail.Request detail) {
         jdbcTemplate.update("""
                 INSERT INTO request_event_details (
                     event_id,
-	                    api_method,
-	                    api_path,
-	                    request_name,
-	                    http_status,
-	                    request_id,
-	                    purchase_id,
-	                    course_id,
-	                    creator_id,
-	                    amount,
-	                    currency,
-	                    payment_method,
-	                    failure_reason
-	                ) VALUES (
-	                    :eventId,
-	                    :apiMethod,
-	                    :apiPath,
-	                    :requestName,
-	                    :httpStatus,
-	                    :requestId,
-	                    :purchaseId,
-	                    :courseId,
-	                    :creatorId,
-	                    :amount,
-	                    :currency,
-	                    :paymentMethod,
-	                    :failureReason
-	                )
-	                """, Map.ofEntries(
-	                Map.entry("eventId", eventId),
-	                Map.entry("apiMethod", detail.apiMethod()),
-	                Map.entry("apiPath", detail.apiPath()),
-	                Map.entry("requestName", detail.requestName()),
-	                Map.entry("httpStatus", detail.httpStatus()),
-	                Map.entry("requestId", detail.requestId()),
-	                Map.entry("purchaseId", detail.purchaseId()),
-	                Map.entry("courseId", detail.courseId()),
-	                Map.entry("creatorId", detail.creatorId()),
-	                Map.entry("amount", detail.amount()),
-	                Map.entry("currency", detail.currency()),
-	                Map.entry("paymentMethod", detail.paymentMethod()),
-	                Map.entry("failureReason", detail.failureReason())
-	        ));
-	    }
+                    api_method,
+                    api_path,
+                    request_name,
+                    http_status,
+                    request_id,
+                    purchase_id,
+                    course_id,
+                    creator_id,
+                    amount,
+                    currency,
+                    payment_method
+                ) VALUES (
+                    :eventId,
+                    :apiMethod,
+                    :apiPath,
+                    :requestName,
+                    :httpStatus,
+                    :requestId,
+                    :purchaseId,
+                    :courseId,
+                    :creatorId,
+                    :amount,
+                    :currency,
+                    :paymentMethod
+                )
+                """, Map.ofEntries(
+                Map.entry("eventId", eventId),
+                Map.entry("apiMethod", detail.apiMethod()),
+                Map.entry("apiPath", detail.apiPath()),
+                Map.entry("requestName", detail.requestName()),
+                Map.entry("httpStatus", detail.httpStatus()),
+                Map.entry("requestId", detail.requestId()),
+                Map.entry("purchaseId", detail.purchaseId()),
+                Map.entry("courseId", detail.courseId()),
+                Map.entry("creatorId", detail.creatorId()),
+                Map.entry("amount", detail.amount()),
+                Map.entry("currency", detail.currency()),
+                Map.entry("paymentMethod", detail.paymentMethod())
+        ));
+    }
 
     private void saveAuthDetail(String eventId, String authProvider, String pageUrl) {
         jdbcTemplate.update("""

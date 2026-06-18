@@ -15,16 +15,15 @@ import org.springframework.stereotype.Component;
 public class EventGenerator {
 
     private static final String[] DEVICE_TYPES = {"desktop", "mobile_web", "tablet"};
-    private static final String[] TRAFFIC_SOURCES = {"organic", "paid_search", "creator_link", "email"};
     private static final String[] MEMBERSHIP_LEVELS = {"guest", "free", "starter", "pro"};
-    private static final String[] AB_TEST_GROUPS = {"control", "variant_a", "variant_b"};
     private static final String[] PAYMENT_METHODS = {"card", "kakao_pay", "naver_pay"};
-    private static final String[] FAILURE_REASONS = {"card_declined", "insufficient_funds", "payment_timeout"};
     private static final String SCHEMA_VERSION = "1.0";
     private static final int PREVIEW_START_RATE = 60;
-    private static final int CHECKOUT_OPEN_RATE = 45;
+    private static final int PREVIEW_COMPLETE_RATE = 68;
+    private static final int CHECKOUT_OPEN_AFTER_PREVIEW_COMPLETE_RATE = 72;
     private static final int PURCHASE_SUBMIT_RATE = 78;
     private static final int PURCHASE_SUCCESS_RATE = 85;
+    private static final int PREVIEW_LENGTH_SECONDS = 180;
 
     public List<GeneratedEvent> generate(int count, long seed) {
         if (count < 0) {
@@ -41,10 +40,10 @@ public class EventGenerator {
             String userId = formatId("user", random.nextInt(240) + 1);
             String courseId = formatId("course", random.nextInt(30) + 1);
             String creatorId = formatId("creator", random.nextInt(12) + 1);
+            String previewId = formatId("preview", random.nextInt(30) + 1);
             String sessionId = formatId("session", journeyNumber);
             String anonymousId = "anon-" + Math.abs(Objects.hash(seed, userId, sessionId));
             String deviceType = pick(DEVICE_TYPES, random);
-            String trafficSource = pick(TRAFFIC_SOURCES, random);
             UserProperties userProperties = createUserProperties(random);
             BigDecimal coursePrice = randomPrice(random);
             Instant journeyStart = baseTime.plus(random.nextInt(14 * 24 * 60), ChronoUnit.MINUTES);
@@ -59,10 +58,10 @@ public class EventGenerator {
                     anonymousId,
                     sessionId,
                     deviceType,
-                    trafficSource,
                     userProperties,
                     courseId,
                     creatorId,
+                    previewId,
                     coursePrice
             );
             journeyNumber++;
@@ -81,15 +80,15 @@ public class EventGenerator {
             String anonymousId,
             String sessionId,
             String deviceType,
-            String trafficSource,
             UserProperties userProperties,
             String courseId,
             String creatorId,
+            String previewId,
             BigDecimal coursePrice
     ) {
         Instant eventTime = journeyStart;
         eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.COURSE_DETAIL_VIEWED, eventTime,
-                userId, anonymousId, sessionId, deviceType, trafficSource, userProperties,
+                userId, anonymousId, sessionId, deviceType, userProperties,
                 new EventDetail.View(
                         "course_detail",
                         "/courses/" + courseId,
@@ -103,28 +102,50 @@ public class EventGenerator {
             eventTime = eventTime.plus(1 + random.nextInt(4), ChronoUnit.MINUTES);
             eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.PREVIEW_STARTED,
                     eventTime,
-                    userId, anonymousId, sessionId, deviceType, trafficSource, userProperties,
-                    new EventDetail.Click(
+                    userId, anonymousId, sessionId, deviceType, userProperties,
+                    new EventDetail.Preview(
                             "course_detail",
                             "/courses/" + courseId,
-                            "start_preview",
-                            "button",
                             courseId,
                             creatorId,
-                            "",
-                            BigDecimal.ZERO.setScale(2, RoundingMode.UNNECESSARY),
-                            ""
+                            previewId,
+                            "intro_preview",
+                            PREVIEW_LENGTH_SECONDS,
+                            0,
+                            BigDecimal.ZERO.setScale(2, RoundingMode.UNNECESSARY)
                     ));
-        }
-
-        if (random.nextInt(100) >= CHECKOUT_OPEN_RATE) {
+        } else {
             return eventNumber;
         }
 
-        eventTime = eventTime.plus(2 + random.nextInt(6), ChronoUnit.MINUTES);
+        if (random.nextInt(100) >= PREVIEW_COMPLETE_RATE) {
+            return eventNumber;
+        }
+
+        eventTime = eventTime.plus(2 + random.nextInt(4), ChronoUnit.MINUTES);
+        eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.PREVIEW_COMPLETED,
+                eventTime,
+                userId, anonymousId, sessionId, deviceType, userProperties,
+                new EventDetail.Preview(
+                        "course_detail",
+                        "/courses/" + courseId,
+                        courseId,
+                        creatorId,
+                        previewId,
+                        "intro_preview",
+                        PREVIEW_LENGTH_SECONDS,
+                        PREVIEW_LENGTH_SECONDS,
+                        BigDecimal.valueOf(100).setScale(2, RoundingMode.UNNECESSARY)
+                ));
+
+        if (random.nextInt(100) >= CHECKOUT_OPEN_AFTER_PREVIEW_COMPLETE_RATE) {
+            return eventNumber;
+        }
+
+        eventTime = eventTime.plus(1 + random.nextInt(4), ChronoUnit.MINUTES);
         eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.CHECKOUT_OPENED,
                 eventTime,
-                userId, anonymousId, sessionId, deviceType, trafficSource, userProperties,
+                userId, anonymousId, sessionId, deviceType, userProperties,
                 new EventDetail.Click(
                         "course_detail",
                         "/courses/" + courseId,
@@ -145,7 +166,7 @@ public class EventGenerator {
         eventTime = eventTime.plus(1 + random.nextInt(4), ChronoUnit.MINUTES);
         eventNumber = addIfPossible(events, maxCount, eventNumber, EventType.PURCHASE_SUBMITTED,
                 eventTime,
-                userId, anonymousId, sessionId, deviceType, trafficSource, userProperties,
+                userId, anonymousId, sessionId, deviceType, userProperties,
                 new EventDetail.Click(
                         "checkout",
                         "/courses/" + courseId + "/checkout",
@@ -159,29 +180,29 @@ public class EventGenerator {
                 ));
 
         boolean successfulPurchase = random.nextInt(100) < PURCHASE_SUCCESS_RATE;
+        if (!successfulPurchase) {
+            return eventNumber;
+        }
+
         String requestId = formatId("request", eventNumber);
-        EventType requestEventType = successfulPurchase ? EventType.PURCHASE_COMPLETED : EventType.PURCHASE_FAILED;
-        int httpStatus = successfulPurchase ? 201 : 402;
-        String purchaseId = successfulPurchase ? formatId("purchase", eventNumber) : "";
-        String failureReason = successfulPurchase ? "" : pick(FAILURE_REASONS, random);
+        String purchaseId = formatId("purchase", eventNumber);
 
         eventTime = eventTime.plus(1 + random.nextInt(3), ChronoUnit.MINUTES);
-        return addIfPossible(events, maxCount, eventNumber, requestEventType,
+        return addIfPossible(events, maxCount, eventNumber, EventType.PURCHASE_COMPLETED,
                 eventTime,
-                userId, anonymousId, sessionId, deviceType, trafficSource, userProperties,
+                userId, anonymousId, sessionId, deviceType, userProperties,
                 new EventDetail.Request(
                         "POST",
                         "/api/purchases",
-                        requestEventType.eventName(),
-                        httpStatus,
+                        EventType.PURCHASE_COMPLETED.eventName(),
+                        201,
                         requestId,
                         purchaseId,
                         courseId,
                         creatorId,
                         coursePrice,
                         "KRW",
-                        paymentMethod,
-                        failureReason
+                        paymentMethod
                 ));
     }
 
@@ -195,7 +216,6 @@ public class EventGenerator {
             String anonymousId,
             String sessionId,
             String deviceType,
-            String trafficSource,
             UserProperties userProperties,
             EventDetail detail
     ) {
@@ -213,7 +233,6 @@ public class EventGenerator {
                 anonymousId,
                 sessionId,
                 deviceType,
-                trafficSource,
                 userProperties,
                 detail
         ));
@@ -223,8 +242,9 @@ public class EventGenerator {
 
     private EventSource sourceFor(EventType eventType) {
         return switch (eventType) {
-            case PURCHASE_COMPLETED, PURCHASE_FAILED -> EventSource.SERVER;
-            case COURSE_DETAIL_VIEWED, PREVIEW_STARTED, CHECKOUT_OPENED, PURCHASE_SUBMITTED -> EventSource.WEB;
+            case PURCHASE_COMPLETED -> EventSource.SERVER;
+            case COURSE_DETAIL_VIEWED, PREVIEW_STARTED, PREVIEW_COMPLETED, CHECKOUT_OPENED, PURCHASE_SUBMITTED ->
+                    EventSource.WEB;
         };
     }
 
@@ -236,8 +256,7 @@ public class EventGenerator {
         return new UserProperties(
                 pick(MEMBERSHIP_LEVELS, random),
                 purchaseCount,
-                purchaseAmount,
-                pick(AB_TEST_GROUPS, random)
+                purchaseAmount
         );
     }
 

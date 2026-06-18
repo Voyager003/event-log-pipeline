@@ -10,7 +10,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Event Type Distribution",
+      "title": "Preview Usage Purchase Conversion",
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
@@ -18,7 +18,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "SELECT event_type, COUNT(*) AS event_count FROM event_logs GROUP BY event_type ORDER BY event_count DESC;"
+          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), preview_starts AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_started' ), preview_completions AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_completed' ), purchase_completions AS ( SELECT DISTINCT e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ), session_groups AS ( SELECT v.user_id, v.session_id, v.course_id, CASE WHEN pc.session_id IS NOT NULL THEN 'completed' WHEN ps.session_id IS NOT NULL THEN 'started_only' ELSE 'not_started' END AS preview_usage_group, pco.session_id IS NOT NULL AS purchased FROM viewed_sessions v LEFT JOIN preview_starts ps ON ps.user_id = v.user_id AND ps.session_id = v.session_id AND ps.course_id = v.course_id LEFT JOIN preview_completions pc ON pc.user_id = v.user_id AND pc.session_id = v.session_id AND pc.course_id = v.course_id LEFT JOIN purchase_completions pco ON pco.user_id = v.user_id AND pco.session_id = v.session_id AND pco.course_id = v.course_id ) SELECT preview_usage_group, COUNT(*) AS session_count, COUNT(*) FILTER (WHERE purchased) AS purchase_count, ROUND(COUNT(*) FILTER (WHERE purchased)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM session_groups GROUP BY preview_usage_group ORDER BY CASE preview_usage_group WHEN 'not_started' THEN 1 WHEN 'started_only' THEN 2 WHEN 'completed' THEN 3 END;"
         }
       ],
       "options": {
@@ -27,7 +27,7 @@
     },
     {
       "id": 2,
-      "title": "Course Purchase Funnel",
+      "title": "Course Preview Purchase Conversion",
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
@@ -35,58 +35,7 @@
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH course_views AS ( SELECT e.user_id, e.session_id, v.course_id, MIN(e.occurred_at) AS viewed_at FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' GROUP BY e.user_id, e.session_id, v.course_id ), checkout_opens AS ( SELECT e.user_id, e.session_id, c.course_id, MIN(e.occurred_at) AS checkout_opened_at FROM event_logs e JOIN click_event_details c ON c.event_id = e.event_id WHERE e.event_type = 'checkout_opened' GROUP BY e.user_id, e.session_id, c.course_id ), purchase_submits AS ( SELECT e.user_id, e.session_id, c.course_id, MIN(e.occurred_at) AS purchase_submitted_at FROM event_logs e JOIN click_event_details c ON c.event_id = e.event_id WHERE e.event_type = 'purchase_submitted' GROUP BY e.user_id, e.session_id, c.course_id ), purchase_completions AS ( SELECT e.user_id, e.session_id, r.course_id, MIN(e.occurred_at) AS purchase_completed_at FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' GROUP BY e.user_id, e.session_id, r.course_id ), funnel AS ( SELECT cv.user_id, cv.session_id, cv.course_id, cv.viewed_at, co.checkout_opened_at, ps.purchase_submitted_at, pc.purchase_completed_at FROM course_views cv LEFT JOIN checkout_opens co ON co.user_id = cv.user_id AND co.session_id = cv.session_id AND co.course_id = cv.course_id AND co.checkout_opened_at >= cv.viewed_at LEFT JOIN purchase_submits ps ON ps.user_id = cv.user_id AND ps.session_id = cv.session_id AND ps.course_id = cv.course_id AND ps.purchase_submitted_at >= co.checkout_opened_at LEFT JOIN purchase_completions pc ON pc.user_id = cv.user_id AND pc.session_id = cv.session_id AND pc.course_id = cv.course_id AND pc.purchase_completed_at >= ps.purchase_submitted_at ) SELECT step_order, step_name, session_count, ROUND(session_count::numeric / NULLIF(MAX(session_count) OVER (), 0) * 100, 2) AS conversion_rate_from_view FROM ( SELECT 1 AS step_order, 'course_detail_viewed' AS step_name, COUNT(*) AS session_count FROM funnel UNION ALL SELECT 2, 'checkout_opened', COUNT(*) FILTER (WHERE checkout_opened_at IS NOT NULL) FROM funnel UNION ALL SELECT 3, 'purchase_submitted', COUNT(*) FILTER (WHERE purchase_submitted_at IS NOT NULL) FROM funnel UNION ALL SELECT 4, 'purchase_completed', COUNT(*) FILTER (WHERE purchase_completed_at IS NOT NULL) FROM funnel ) steps ORDER BY step_order;"
-        }
-      ],
-      "options": {
-        "showHeader": true
-      }
-    },
-    {
-      "id": 3,
-      "title": "A/B Test Purchase Conversion",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "table",
-          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.ab_test_group, e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), completed_sessions AS ( SELECT DISTINCT e.ab_test_group, e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ) SELECT v.ab_test_group, COUNT(*) AS viewed_sessions, COUNT(c.session_id) AS completed_sessions, ROUND(COUNT(c.session_id)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM viewed_sessions v LEFT JOIN completed_sessions c ON c.ab_test_group = v.ab_test_group AND c.user_id = v.user_id AND c.session_id = v.session_id AND c.course_id = v.course_id GROUP BY v.ab_test_group ORDER BY purchase_conversion_rate DESC;"
-        }
-      ],
-      "options": {
-        "showHeader": true
-      }
-    },
-    {
-      "id": 4,
-      "title": "Purchase Failure Reasons",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "table",
-          "rawSql": "SELECT COALESCE(NULLIF(failure_reason, ''), 'none') AS failure_reason, COUNT(*) AS failed_requests, ROUND(COUNT(*)::numeric / NULLIF(SUM(COUNT(*)) OVER (), 0) * 100, 2) AS failure_reason_share FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_failed' GROUP BY COALESCE(NULLIF(failure_reason, ''), 'none') ORDER BY failed_requests DESC;"
-        }
-      ],
-      "options": {
-        "showHeader": true
-      }
-    },
-    {
-      "id": 5,
-      "title": "Traffic Source Purchase Conversion",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
-      "targets": [
-        {
-          "refId": "A",
-          "format": "table",
-          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.traffic_source, e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), completed_sessions AS ( SELECT DISTINCT e.traffic_source, e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ) SELECT v.traffic_source, COUNT(*) AS viewed_sessions, COUNT(c.session_id) AS completed_sessions, ROUND(COUNT(c.session_id)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM viewed_sessions v LEFT JOIN completed_sessions c ON c.traffic_source = v.traffic_source AND c.user_id = v.user_id AND c.session_id = v.session_id AND c.course_id = v.course_id GROUP BY v.traffic_source ORDER BY purchase_conversion_rate DESC;"
+          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), preview_starts AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_started' ), preview_completions AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_completed' ), purchase_completions AS ( SELECT DISTINCT e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ) SELECT v.course_id, COUNT(*) AS viewed_sessions, COUNT(ps.session_id) AS preview_started_sessions, COUNT(pc.session_id) AS preview_completed_sessions, COUNT(pco.session_id) AS purchase_count, ROUND(COUNT(pc.session_id)::numeric / NULLIF(COUNT(ps.session_id), 0) * 100, 2) AS preview_completion_rate, ROUND(COUNT(pco.session_id)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM viewed_sessions v LEFT JOIN preview_starts ps ON ps.user_id = v.user_id AND ps.session_id = v.session_id AND ps.course_id = v.course_id LEFT JOIN preview_completions pc ON pc.user_id = v.user_id AND pc.session_id = v.session_id AND pc.course_id = v.course_id LEFT JOIN purchase_completions pco ON pco.user_id = v.user_id AND pco.session_id = v.session_id AND pco.course_id = v.course_id GROUP BY v.course_id ORDER BY purchase_conversion_rate DESC, preview_completion_rate DESC;"
         }
       ],
       "options": {

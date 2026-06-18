@@ -12,15 +12,12 @@ import org.springframework.core.io.ClassPathResource;
 class AnalyticsQueryTests {
 
     private static final List<String> ANALYTICS_QUERIES = List.of(
-            "analytics/event_type_counts.sql",
-            "analytics/course_purchase_funnel.sql",
-            "analytics/ab_test_purchase_conversion.sql",
-            "analytics/traffic_source_purchase_conversion.sql",
-            "analytics/purchase_failure_rate.sql"
+            "analytics/preview_usage_purchase_conversion.sql",
+            "analytics/course_preview_purchase_conversion.sql"
     );
 
     @Test
-    void providesFourAnalyticsQueriesForStepThree() {
+    void providesAnalyticsQueriesForStepThree() {
         assertThat(ANALYTICS_QUERIES)
                 .allSatisfy(path -> assertThat(new ClassPathResource(path).exists()).isTrue());
     }
@@ -37,40 +34,36 @@ class AnalyticsQueryTests {
     }
 
     @Test
-    void funnelQueryUsesJourneyIdentifiersAndBusinessEvents() throws IOException {
-        String sql = readSql("analytics/course_purchase_funnel.sql");
+    void previewUsageQueryComparesPreviewUsageGroups() throws IOException {
+        String sql = readSql("analytics/preview_usage_purchase_conversion.sql");
 
         assertThat(sql)
                 .contains("user_id")
                 .contains("session_id")
                 .contains("course_id")
-                .contains("course_detail_viewed")
-                .contains("checkout_opened")
-                .contains("purchase_submitted")
+                .contains("preview_usage_group")
+                .contains("not_started")
+                .contains("started_only")
+                .contains("completed")
+                .contains("preview_started")
+                .contains("preview_completed")
                 .contains("purchase_completed");
     }
 
     @Test
-    void segmentQueriesUseUserPropertiesAndAcquisitionContext() throws IOException {
-        String abTestSql = readSql("analytics/ab_test_purchase_conversion.sql");
-        String trafficSourceSql = readSql("analytics/traffic_source_purchase_conversion.sql");
-
-        assertThat(abTestSql)
-                .contains("ab_test_group")
-                .contains("purchase_completed");
-        assertThat(trafficSourceSql)
-                .contains("traffic_source")
-                .contains("purchase_completed");
-    }
-
-    @Test
-    void failureQueryUsesPurchaseFailureDetails() throws IOException {
-        String sql = readSql("analytics/purchase_failure_rate.sql");
+    void coursePreviewQueryComparesCourseLevelPreviewAndPurchaseConversion() throws IOException {
+        String sql = readSql("analytics/course_preview_purchase_conversion.sql");
 
         assertThat(sql)
-                .contains("request_event_details")
-                .contains("purchase_failed")
-                .contains("failure_reason");
+                .contains("course_id")
+                .contains("viewed_sessions")
+                .contains("preview_started_sessions")
+                .contains("preview_completed_sessions")
+                .contains("purchase_count")
+                .contains("preview_completion_rate")
+                .contains("purchase_conversion_rate")
+                .contains("preview_completed")
+                .contains("purchase_completed");
     }
 
     private String readSql(String path) throws IOException {

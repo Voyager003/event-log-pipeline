@@ -30,7 +30,7 @@ services:
       [
         "sh",
         "-c",
-        "psql -h db -U event_log_app -d event_log_pipeline -c 'DROP TABLE IF EXISTS auth_event_details, request_event_details, click_event_details, view_event_details, event_logs CASCADE;'"
+        "psql -h db -U event_log_app -d event_log_pipeline -c 'DROP TABLE IF EXISTS auth_event_details, request_event_details, click_event_details, preview_event_details, view_event_details, event_logs CASCADE;'"
       ]
     depends_on:
       db:
