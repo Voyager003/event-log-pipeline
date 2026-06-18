@@ -1,12 +1,10 @@
 package com.eventlogpipeline.event;
 
 public enum EventType {
-    COURSE_DETAIL_VIEWED("course_detail_viewed"),
-    PREVIEW_STARTED("preview_started"),
-    PREVIEW_COMPLETED("preview_completed"),
-    CHECKOUT_OPENED("checkout_opened"),
-    PURCHASE_SUBMITTED("purchase_submitted"),
-    PURCHASE_COMPLETED("purchase_completed");
+    LECTURE_STARTED("lecture_started"),
+    LECTURE_PLAYED("lecture_played"),
+    LECTURE_COMPLETED("lecture_completed"),
+    VIDEO_ERROR_OCCURRED("video_error_occurred");
 
     private final String eventName;
 

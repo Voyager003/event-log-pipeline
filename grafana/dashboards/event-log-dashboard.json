@@ -1,45 +1,160 @@
 {
   "id": null,
   "uid": "event-log-overview",
-  "title": "Event Log Overview",
-  "tags": ["event-log", "liveklass"],
+  "title": "Lecture Traffic Overview",
+  "tags": ["event-log", "liveklass", "lecture-traffic"],
   "timezone": "browser",
   "schemaVersion": 39,
   "version": 1,
   "refresh": "30s",
+  "time": {
+    "from": "2026-06-01T00:00:00Z",
+    "to": "2026-06-15T00:00:00Z"
+  },
   "panels": [
     {
       "id": 1,
-      "title": "Preview Usage Purchase Conversion",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "title": "Total Generated Events",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
       "targets": [
         {
           "refId": "A",
           "format": "table",
-          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), preview_starts AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_started' ), preview_completions AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_completed' ), purchase_completions AS ( SELECT DISTINCT e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ), session_groups AS ( SELECT v.user_id, v.session_id, v.course_id, CASE WHEN pc.session_id IS NOT NULL THEN 'completed' WHEN ps.session_id IS NOT NULL THEN 'started_only' ELSE 'not_started' END AS preview_usage_group, pco.session_id IS NOT NULL AS purchased FROM viewed_sessions v LEFT JOIN preview_starts ps ON ps.user_id = v.user_id AND ps.session_id = v.session_id AND ps.course_id = v.course_id LEFT JOIN preview_completions pc ON pc.user_id = v.user_id AND pc.session_id = v.session_id AND pc.course_id = v.course_id LEFT JOIN purchase_completions pco ON pco.user_id = v.user_id AND pco.session_id = v.session_id AND pco.course_id = v.course_id ) SELECT preview_usage_group, COUNT(*) AS session_count, COUNT(*) FILTER (WHERE purchased) AS purchase_count, ROUND(COUNT(*) FILTER (WHERE purchased)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM session_groups GROUP BY preview_usage_group ORDER BY CASE preview_usage_group WHEN 'not_started' THEN 1 WHEN 'started_only' THEN 2 WHEN 'completed' THEN 3 END;"
+          "rawSql": "SELECT COUNT(*) AS total_events FROM event_logs;"
         }
       ],
       "options": {
-        "showHeader": true
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
       }
     },
     {
       "id": 2,
-      "title": "Course Preview Purchase Conversion",
-      "type": "table",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "title": "Lecture Events by Hour",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
       "targets": [
         {
           "refId": "A",
-          "format": "table",
-          "rawSql": "WITH viewed_sessions AS ( SELECT DISTINCT e.user_id, e.session_id, v.course_id FROM event_logs e JOIN view_event_details v ON v.event_id = e.event_id WHERE e.event_type = 'course_detail_viewed' ), preview_starts AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_started' ), preview_completions AS ( SELECT DISTINCT e.user_id, e.session_id, p.course_id FROM event_logs e JOIN preview_event_details p ON p.event_id = e.event_id WHERE e.event_type = 'preview_completed' ), purchase_completions AS ( SELECT DISTINCT e.user_id, e.session_id, r.course_id FROM event_logs e JOIN request_event_details r ON r.event_id = e.event_id WHERE e.event_type = 'purchase_completed' ) SELECT v.course_id, COUNT(*) AS viewed_sessions, COUNT(ps.session_id) AS preview_started_sessions, COUNT(pc.session_id) AS preview_completed_sessions, COUNT(pco.session_id) AS purchase_count, ROUND(COUNT(pc.session_id)::numeric / NULLIF(COUNT(ps.session_id), 0) * 100, 2) AS preview_completion_rate, ROUND(COUNT(pco.session_id)::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS purchase_conversion_rate FROM viewed_sessions v LEFT JOIN preview_starts ps ON ps.user_id = v.user_id AND ps.session_id = v.session_id AND ps.course_id = v.course_id LEFT JOIN preview_completions pc ON pc.user_id = v.user_id AND pc.session_id = v.session_id AND pc.course_id = v.course_id LEFT JOIN purchase_completions pco ON pco.user_id = v.user_id AND pco.session_id = v.session_id AND pco.course_id = v.course_id GROUP BY v.course_id ORDER BY purchase_conversion_rate DESC, preview_completion_rate DESC;"
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", e.event_type AS metric, COUNT(*) AS value FROM event_logs e WHERE e.event_type IN ('lecture_started', 'lecture_played', 'lecture_completed') GROUP BY 1, 2 ORDER BY 1, 2;"
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
       "options": {
-        "showHeader": true
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Active Sessions by Hour",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", COUNT(DISTINCT e.session_id) AS active_session_count, COUNT(DISTINCT e.user_id) AS active_user_count FROM event_logs e WHERE e.event_type IN ('lecture_started', 'lecture_played', 'lecture_completed') GROUP BY 1 ORDER BY 1;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Video Error Rate by Hour",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "event-log-postgres" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", ROUND(COUNT(*) FILTER (WHERE e.event_type = 'video_error_occurred')::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS error_rate FROM event_logs e GROUP BY 1 ORDER BY 1;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 3 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["lastNotNull", "max"]
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
       }
     }
   ]

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Random;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -21,27 +22,23 @@ class JdbcEventLogStoreTests {
     @Test
     void savesEnvelopeAndTypeSpecificDetails() {
         when(jdbcTemplate.update(org.mockito.ArgumentMatchers.anyString(), anyMap())).thenReturn(1);
-        var events = new EventGenerator().generate(1_000, 20260615L);
+        var events = new EventGenerator().generate(1_000, new Random(20260615L));
 
         int savedCount = store.saveAll(events);
 
         assertThat(savedCount).isEqualTo(1_000);
         verify(jdbcTemplate, times(1_000)).update(contains("INSERT INTO event_logs"), anyMap());
-        verify(jdbcTemplate, times(countDetails(events, EventDetail.View.class)))
-                .update(contains("INSERT INTO view_event_details"), anyMap());
-        verify(jdbcTemplate, times(countDetails(events, EventDetail.Preview.class)))
-                .update(contains("INSERT INTO preview_event_details"), anyMap());
-        verify(jdbcTemplate, times(countDetails(events, EventDetail.Click.class)))
-                .update(contains("INSERT INTO click_event_details"), anyMap());
-        verify(jdbcTemplate, times(countDetails(events, EventDetail.Request.class)))
-                .update(contains("INSERT INTO request_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.Lecture.class)))
+                .update(contains("INSERT INTO lecture_event_details"), anyMap());
+        verify(jdbcTemplate, times(countDetails(events, EventDetail.VideoError.class)))
+                .update(contains("INSERT INTO video_error_event_details"), anyMap());
     }
 
     @Test
     @SuppressWarnings({"unchecked", "rawtypes"})
     void storesEnvelopeFieldsAsSeparatedColumns() {
         when(jdbcTemplate.update(org.mockito.ArgumentMatchers.anyString(), anyMap())).thenReturn(1);
-        var event = new EventGenerator().generate(1, 20260615L).getFirst();
+        var event = new EventGenerator().generate(1, new Random(20260615L)).getFirst();
 
         store.saveAll(List.of(event));
 
@@ -54,9 +51,8 @@ class JdbcEventLogStoreTests {
                 .containsEntry("source", event.source().name())
                 .containsEntry("schemaVersion", event.schemaVersion())
                 .containsEntry("userId", event.userId())
-                .containsEntry("membershipLevel", event.userProperties().membershipLevel())
-                .containsEntry("lifetimePurchaseCount", event.userProperties().lifetimePurchaseCount())
-                .containsEntry("lifetimePurchaseAmount", event.userProperties().lifetimePurchaseAmount());
+                .containsEntry("sessionId", event.sessionId())
+                .containsEntry("deviceType", event.deviceType());
     }
 
     private int countDetails(List<GeneratedEvent> events, Class<? extends EventDetail> detailType) {

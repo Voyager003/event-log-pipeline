@@ -12,8 +12,9 @@ import org.springframework.core.io.ClassPathResource;
 class AnalyticsQueryTests {
 
     private static final List<String> ANALYTICS_QUERIES = List.of(
-            "analytics/preview_usage_purchase_conversion.sql",
-            "analytics/course_preview_purchase_conversion.sql"
+            "analytics/hourly_lecture_event_trends.sql",
+            "analytics/hourly_active_sessions.sql",
+            "analytics/hourly_video_error_rate.sql"
     );
 
     @Test
@@ -34,36 +35,35 @@ class AnalyticsQueryTests {
     }
 
     @Test
-    void previewUsageQueryComparesPreviewUsageGroups() throws IOException {
-        String sql = readSql("analytics/preview_usage_purchase_conversion.sql");
+    void hourlyLectureTrendQueryAggregatesLectureEventsByHour() throws IOException {
+        String sql = readSql("analytics/hourly_lecture_event_trends.sql");
 
         assertThat(sql)
-                .contains("user_id")
-                .contains("session_id")
-                .contains("course_id")
-                .contains("preview_usage_group")
-                .contains("not_started")
-                .contains("started_only")
-                .contains("completed")
-                .contains("preview_started")
-                .contains("preview_completed")
-                .contains("purchase_completed");
+                .contains("date_trunc('hour'")
+                .contains("lecture_started")
+                .contains("lecture_played")
+                .contains("lecture_completed")
+                .contains("event_count");
     }
 
     @Test
-    void coursePreviewQueryComparesCourseLevelPreviewAndPurchaseConversion() throws IOException {
-        String sql = readSql("analytics/course_preview_purchase_conversion.sql");
+    void hourlyActiveSessionQueryCountsDistinctSessionsAndUsers() throws IOException {
+        String sql = readSql("analytics/hourly_active_sessions.sql");
 
         assertThat(sql)
-                .contains("course_id")
-                .contains("viewed_sessions")
-                .contains("preview_started_sessions")
-                .contains("preview_completed_sessions")
-                .contains("purchase_count")
-                .contains("preview_completion_rate")
-                .contains("purchase_conversion_rate")
-                .contains("preview_completed")
-                .contains("purchase_completed");
+                .contains("COUNT(DISTINCT e.session_id)")
+                .contains("active_session_count")
+                .contains("active_user_count");
+    }
+
+    @Test
+    void hourlyVideoErrorRateQueryCalculatesErrorRate() throws IOException {
+        String sql = readSql("analytics/hourly_video_error_rate.sql");
+
+        assertThat(sql)
+                .contains("video_error_occurred")
+                .contains("error_event_count")
+                .contains("error_rate");
     }
 
     private String readSql(String path) throws IOException {

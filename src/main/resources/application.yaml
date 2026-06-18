@@ -6,4 +6,3 @@ spring:
 
 event-generator:
   count: 1000
-  seed: 20260615
