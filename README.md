@@ -93,7 +93,7 @@ docker compose up --build
 
 - `hourly_active_sessions.sql`
 
-- 시간대별 활성 수강 세션 수와 활성 수강 사용자 수를 집계합니다. 특정 시간대에 몇 명이 실제로 강의를 보고 있었는지 확인하고, 동시 수강 규모가 어느 정도인지 검증하기 위한 쿼리입니다.
+시간대별 활성 수강 세션 수와 활성 수강 사용자 수를 집계합니다. 특정 시간대에 몇 명이 실제로 강의를 보고 있었는지 확인하고, 동시 수강 규모가 어느 정도인지 검증하기 위한 쿼리입니다.
 
 - `hourly_video_error_rate.sql`
 
@@ -107,7 +107,35 @@ docker compose up --build
 
 ## AWS 아키텍처 설계
 
+![](/img/06.png)
 
+작은 규모의 이벤트 로그 파이프라인으로 가정하고 `EC2 + Docker Compose + RDS PostgreSQL`를 중심으로 구성했습니다.
+
+### 사용 AWS 서비스와 역할
+
+- ALB(Application Load Balancer)
+
+`Application Load Balancer`는 외부 요청을 App Server로 분산하는 역할로, App Server를 직접 노출하지 않고 여러 AZ의 서버로 요청을 분산하기 위해 배치했습니다.
+
+- EC2 Instance
+
+애플리케이션 서버같은 경우 `EC2 App Server`에 `Docker Compose`로 애플리케이션 서버를 실행하도록 했습니다.
+
+관리형 서비스인 `ECS Fargate`도 후보였는데 기술 숙련도 부족으로 이번 설계에서는 운영 복잡도를 줄이고 설명 가능한 구조를 우선하여 EC2에 Docker Compose에 배포하는 방식을 선택했습니다.
+
+- RDS(Relational Database Service)
+
+로그 저장소는 프로젝트와 마찬가지로 RDB를 택했는데 Docker에 RDB를 직접 배포하는게 아닌 관리형 서비스인 `RDS PostgreSQL`를 택했습니다.
+
+이전에 작업한 프로젝트에서는 Docker에서 배포한 RDB의 복구와 Failover 과정을 구현해야 하는 번거로움이 있었는데 RDS는 이를 보다 쉽게 해결해주기 위한 기능을 제공하기 때문입니다.
+
+로그 저장소에 대해 `S3 Storage`를 고민했었는데 프로젝트의 규모와 분석 방식을 고려했을 때 현재는 RDS PostgreSQL이 더 적합하다고 생각합니다.
+
+S3는 대규모 원본 로그를 저비용으로 장기 보관하기에 유리하지만, 저장된 데이터를 바로 SQL로 집계하고 시각화하려면 Athena같은 추가 분석 구성이 필요합니다.
+
+반면 RDB는 상대적으로 저장 비용과 장기 보관 부담은 있지만, 이벤트를 필드 단위로 구조화해 저장하고 JOIN, GROUP BY, COUNT 같은 SQL 집계를 바로 수행하기에 적합합니다.
+
+추후에 이벤트의 양이 증가하면 RDS에는 최근 분석용 데이터를 두고, S3에는 원본 로그를 장기 보관하는 구조로 확장할 수 있다고 판단했습니다.
 
 ## 참고 자료
 
