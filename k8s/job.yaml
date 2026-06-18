@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: event-generator-job
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: event-generator
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: event-generator
+          image: event-log-pipeline:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: event-generator-config
+            - secretRef:
+                name: event-generator-secret
