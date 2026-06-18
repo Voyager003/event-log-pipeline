@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Random;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 
@@ -12,24 +15,38 @@ class EventGeneratorTests {
     private final EventGenerator eventGenerator = new EventGenerator();
 
     @Test
-    void generatesRequestedNumberOfEvents() {
-        var events = eventGenerator.generate(1_000, 20260615L);
+    void generatesRequestedNumberOfLectureSessions() {
+        var events = generateWithFixedRandom(100);
 
-        assertThat(events).hasSize(1_000);
+        assertThat(events)
+                .filteredOn(event -> event.eventType() == EventType.LECTURE_STARTED)
+                .hasSize(100);
+        assertThat(events).hasSizeGreaterThan(100);
     }
 
     @Test
     void includesAllSupportedLiveklassEventTypes() {
-        var eventTypes = eventGenerator.generate(1_000, 20260615L).stream()
+        var eventTypes = generateWithFixedRandom(1_000).stream()
                 .map(GeneratedEvent::eventType)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         assertThat(eventTypes).isEqualTo(EnumSet.allOf(EventType.class));
     }
 
     @Test
+    void createsEnoughPlaybackHeartbeatsForTrafficAggregation() {
+        var events = generateWithFixedRandom(1_000);
+
+        long heartbeatCount = events.stream()
+                .filter(event -> event.eventType() == EventType.LECTURE_PLAYBACK_HEARTBEAT)
+                .count();
+
+        assertThat(heartbeatCount).isGreaterThan(1_000);
+    }
+
+    @Test
     void fillsRequiredEnvelopeFieldsAndTypeSpecificDetail() {
-        var events = eventGenerator.generate(100, 20260615L);
+        var events = generateWithFixedRandom(100);
 
         assertThat(events).allSatisfy(event -> {
             assertThat(event.eventId()).isNotBlank();
@@ -41,44 +58,93 @@ class EventGeneratorTests {
             assertThat(event.anonymousId()).isNotBlank();
             assertThat(event.sessionId()).isNotBlank();
             assertThat(event.deviceType()).isNotBlank();
-            assertThat(event.trafficSource()).isNotBlank();
-            assertThat(event.userProperties()).isNotNull();
-            assertThat(event.userProperties().membershipLevel()).isNotBlank();
-            assertThat(event.userProperties().lifetimePurchaseCount()).isGreaterThanOrEqualTo(0);
-            assertThat(event.userProperties().lifetimePurchaseAmount()).isNotNull();
-            assertThat(event.userProperties().abTestGroup()).isNotBlank();
             assertThat(event.detail()).isNotNull();
         });
 
-        assertThat(events).anySatisfy(event -> assertThat(event.detail()).isInstanceOf(EventDetail.View.class));
-        assertThat(events).anySatisfy(event -> assertThat(event.detail()).isInstanceOf(EventDetail.Click.class));
-        assertThat(events).anySatisfy(event -> assertThat(event.detail()).isInstanceOf(EventDetail.Request.class));
+        assertThat(events).anySatisfy(event -> assertThat(event.detail()).isInstanceOf(EventDetail.Lecture.class));
+        assertThat(events).anySatisfy(event -> assertThat(event.detail()).isInstanceOf(EventDetail.VideoError.class));
     }
 
     @Test
-    void mapsWebAndServerSourcesFromEventType() {
-        var events = eventGenerator.generate(1_000, 20260615L);
+    void generatesDifferentEventsAcrossDefaultRuns() {
+        var firstRun = eventGenerator.generate(100, 5);
+        var secondRun = eventGenerator.generate(100, 5);
+
+        assertThat(secondRun).isNotEqualTo(firstRun);
+    }
+
+    @Test
+    void mapsLectureEventsToWebAndVideoErrorsToServer() {
+        var events = generateWithFixedRandom(1_000);
 
         assertThat(events)
-                .filteredOn(event -> event.eventType() == EventType.REQUEST)
+                .filteredOn(event -> event.eventType() == EventType.VIDEO_ERROR_OCCURRED)
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.SERVER));
         assertThat(events)
-                .filteredOn(event -> event.eventType() != EventType.REQUEST)
+                .filteredOn(event -> isLectureEvent(event.eventType()))
                 .allSatisfy(event -> assertThat(event.source()).isEqualTo(EventSource.WEB));
     }
 
     @Test
-    void generatesDeterministicEventsForSameSeed() {
-        var firstRun = eventGenerator.generate(1_000, 20260615L);
-        var secondRun = eventGenerator.generate(1_000, 20260615L);
+    void preservesEventOrderWithinSameSession() {
+        var eventsBySession = generateWithFixedRandom(1_000).stream()
+                .collect(Collectors.groupingBy(GeneratedEvent::sessionId));
 
-        assertThat(secondRun).isEqualTo(firstRun);
+        assertThat(eventsBySession.values()).allSatisfy(sessionEvents -> {
+            assertThat(sessionEvents.getFirst().eventType()).isEqualTo(EventType.LECTURE_STARTED);
+            assertThat(isChronological(sessionEvents)).isTrue();
+            assertThat(hasNoEventsAfterTerminalEvent(sessionEvents)).isTrue();
+        });
+    }
+
+    @Test
+    void exposesReadableSnakeCaseEventNamesForStorageAndAnalytics() {
+        assertThat(EventType.LECTURE_STARTED.eventName()).isEqualTo("lecture_started");
+        assertThat(EventType.LECTURE_PLAYBACK_HEARTBEAT.eventName()).isEqualTo("lecture_playback_heartbeat");
+        assertThat(EventType.LECTURE_COMPLETED.eventName()).isEqualTo("lecture_completed");
+        assertThat(EventType.VIDEO_ERROR_OCCURRED.eventName()).isEqualTo("video_error_occurred");
     }
 
     @Test
     void rejectsNegativeCount() {
-        assertThatThrownBy(() -> eventGenerator.generate(-1, 20260615L))
+        assertThatThrownBy(() -> eventGenerator.generate(-1, 5))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("count must be greater than or equal to 0");
+                .hasMessage("sessionCount must be greater than or equal to 0");
+    }
+
+    @Test
+    void rejectsInvalidHeartbeatInterval() {
+        assertThatThrownBy(() -> eventGenerator.generate(100, 0))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("heartbeatIntervalMinutes must be greater than 0");
+    }
+
+    private java.util.List<GeneratedEvent> generateWithFixedRandom(int sessionCount) {
+        return eventGenerator.generate(sessionCount, 5, new Random(20260615L));
+    }
+
+    private boolean isChronological(List<GeneratedEvent> events) {
+        for (int index = 1; index < events.size(); index++) {
+            if (events.get(index).occurredAt().isBefore(events.get(index - 1).occurredAt())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasNoEventsAfterTerminalEvent(List<GeneratedEvent> events) {
+        for (int index = 0; index < events.size() - 1; index++) {
+            EventType eventType = events.get(index).eventType();
+            if (eventType == EventType.LECTURE_COMPLETED || eventType == EventType.VIDEO_ERROR_OCCURRED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean isLectureEvent(EventType eventType) {
+        return eventType == EventType.LECTURE_STARTED
+                || eventType == EventType.LECTURE_PLAYBACK_HEARTBEAT
+                || eventType == EventType.LECTURE_COMPLETED;
     }
 }

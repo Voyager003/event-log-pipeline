@@ -12,14 +12,13 @@ import org.springframework.core.io.ClassPathResource;
 class AnalyticsQueryTests {
 
     private static final List<String> ANALYTICS_QUERIES = List.of(
-            "analytics/event_type_counts.sql",
-            "analytics/hourly_event_trends.sql",
-            "analytics/purchase_click_to_request_funnel.sql",
-            "analytics/request_failure_rate.sql"
+            "analytics/hourly_lecture_event_trends.sql",
+            "analytics/hourly_active_sessions.sql",
+            "analytics/hourly_video_error_rate.sql"
     );
 
     @Test
-    void providesFourAnalyticsQueriesForStepThree() {
+    void providesAnalyticsQueriesForStepThree() {
         assertThat(ANALYTICS_QUERIES)
                 .allSatisfy(path -> assertThat(new ClassPathResource(path).exists()).isTrue());
     }
@@ -36,23 +35,35 @@ class AnalyticsQueryTests {
     }
 
     @Test
-    void funnelQueryUsesClickAndRequestDetailTables() throws IOException {
-        String sql = readSql("analytics/purchase_click_to_request_funnel.sql");
+    void hourlyLectureTrendQueryAggregatesPlaybackHeartbeatsByHour() throws IOException {
+        String sql = readSql("analytics/hourly_lecture_event_trends.sql");
 
         assertThat(sql)
-                .contains("click_event_details")
-                .contains("request_event_details")
-                .contains("purchase_submit")
-                .contains("purchase_course");
+                .contains("date_trunc('hour'")
+                .contains("lecture_playback_heartbeat")
+                .contains("playback_heartbeat_count");
     }
 
     @Test
-    void timeSeriesQueryUsesHourlyBuckets() throws IOException {
-        String sql = readSql("analytics/hourly_event_trends.sql");
+    void hourlyActiveSessionQueryCountsDistinctSessionsAndUsers() throws IOException {
+        String sql = readSql("analytics/hourly_active_sessions.sql");
 
         assertThat(sql)
-                .contains("date_trunc('hour', occurred_at)")
-                .contains("GROUP BY event_hour, event_type");
+                .contains("COUNT(DISTINCT e.session_id)")
+                .contains("active_lecture_session_count")
+                .contains("active_lecture_user_count")
+                .contains("lecture_playback_heartbeat");
+    }
+
+    @Test
+    void hourlyVideoErrorRateQueryCalculatesErrorRate() throws IOException {
+        String sql = readSql("analytics/hourly_video_error_rate.sql");
+
+        assertThat(sql)
+                .contains("lecture_playback_heartbeat")
+                .contains("video_error_occurred")
+                .contains("error_event_count")
+                .contains("error_rate");
     }
 
     private String readSql(String path) throws IOException {

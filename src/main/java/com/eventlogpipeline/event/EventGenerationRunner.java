@@ -27,11 +27,11 @@ public class EventGenerationRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        var events = eventGenerator.generate(properties.count(), properties.seed());
+        var events = eventGenerator.generate(properties.sessionCount(), properties.heartbeatIntervalMinutes());
         Map<EventType, Long> countsByType = events.stream()
                 .collect(Collectors.groupingBy(GeneratedEvent::eventType, Collectors.counting()));
 
-        log.info("Generated {} Liveklass events with seed {}", events.size(), properties.seed());
+        log.info("Generated {} Liveklass events from {} lecture sessions", events.size(), properties.sessionCount());
         countsByType.forEach((eventType, count) -> log.info("{}={}", eventType, count));
 
         eventLogStore.ifAvailable(store -> {

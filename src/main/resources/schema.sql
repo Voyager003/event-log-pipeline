@@ -7,49 +7,29 @@ CREATE TABLE IF NOT EXISTS event_logs (
     user_id text NOT NULL,
     anonymous_id text NOT NULL,
     session_id text NOT NULL,
-    device_type text NOT NULL,
-    traffic_source text NOT NULL,
-    membership_level text NOT NULL,
-    lifetime_purchase_count integer NOT NULL,
-    lifetime_purchase_amount numeric(12, 2) NOT NULL,
-    ab_test_group text NOT NULL
+    device_type text NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_event_logs_event_type ON event_logs (event_type);
 CREATE INDEX IF NOT EXISTS idx_event_logs_occurred_at ON event_logs (occurred_at);
 CREATE INDEX IF NOT EXISTS idx_event_logs_user_id ON event_logs (user_id);
+CREATE INDEX IF NOT EXISTS idx_event_logs_session_id ON event_logs (session_id);
 
-CREATE TABLE IF NOT EXISTS view_event_details (
+CREATE TABLE IF NOT EXISTS lecture_event_details (
     event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
-    page_name text NOT NULL,
-    page_url text NOT NULL,
-    referrer text,
-    course_id text,
-    creator_id text
+    course_id text NOT NULL,
+    lecture_id text NOT NULL,
+    lecture_title text NOT NULL,
+    playback_position_seconds integer NOT NULL,
+    watch_duration_seconds integer NOT NULL,
+    completion_rate numeric(5, 2) NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS click_event_details (
+CREATE TABLE IF NOT EXISTS video_error_event_details (
     event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
-    page_name text NOT NULL,
-    page_url text NOT NULL,
-    component_name text NOT NULL,
-    component_type text NOT NULL,
-    course_id text
-);
-
-CREATE TABLE IF NOT EXISTS request_event_details (
-    event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
-    api_method text NOT NULL,
-    api_path text NOT NULL,
-    request_name text NOT NULL,
-    http_status integer NOT NULL,
-    course_id text,
-    amount numeric(12, 2),
-    currency text
-);
-
-CREATE TABLE IF NOT EXISTS auth_event_details (
-    event_id text PRIMARY KEY REFERENCES event_logs (event_id) ON DELETE CASCADE,
-    auth_provider text NOT NULL,
-    page_url text NOT NULL
+    course_id text NOT NULL,
+    lecture_id text NOT NULL,
+    error_type text NOT NULL,
+    error_code text NOT NULL,
+    error_message text NOT NULL
 );

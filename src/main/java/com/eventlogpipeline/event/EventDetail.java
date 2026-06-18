@@ -2,28 +2,13 @@ package com.eventlogpipeline.event;
 
 import java.math.BigDecimal;
 
-public sealed interface EventDetail permits
-        EventDetail.Login,
-        EventDetail.View,
-        EventDetail.Click,
-        EventDetail.Request,
-        EventDetail.Logout {
+public sealed interface EventDetail permits EventDetail.Lecture, EventDetail.VideoError {
 
-    record Login(String authProvider, String pageUrl) implements EventDetail {
+    record Lecture(String courseId, String lectureId, String lectureTitle, int playbackPositionSeconds,
+                   int watchDurationSeconds, BigDecimal completionRate) implements EventDetail {
     }
 
-    record View(String pageName, String pageUrl, String referrer, String courseId, String creatorId)
+    record VideoError(String courseId, String lectureId, String errorType, String errorCode, String errorMessage)
             implements EventDetail {
-    }
-
-    record Click(String pageName, String pageUrl, String componentName, String componentType, String courseId)
-            implements EventDetail {
-    }
-
-    record Request(String apiMethod, String apiPath, String requestName, int httpStatus, String courseId,
-                   BigDecimal amount, String currency) implements EventDetail {
-    }
-
-    record Logout(String authProvider, String pageUrl) implements EventDetail {
     }
 }
