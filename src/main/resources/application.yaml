@@ -5,4 +5,5 @@ spring:
     default: generator
 
 event-generator:
-  count: 1000
+  session-count: 5000
+  heartbeat-interval-minutes: 5

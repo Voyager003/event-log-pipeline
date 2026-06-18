@@ -22,12 +22,12 @@ class JdbcEventLogStoreTests {
     @Test
     void savesEnvelopeAndTypeSpecificDetails() {
         when(jdbcTemplate.update(org.mockito.ArgumentMatchers.anyString(), anyMap())).thenReturn(1);
-        var events = new EventGenerator().generate(1_000, new Random(20260615L));
+        var events = new EventGenerator().generate(100, 5, new Random(20260615L));
 
         int savedCount = store.saveAll(events);
 
-        assertThat(savedCount).isEqualTo(1_000);
-        verify(jdbcTemplate, times(1_000)).update(contains("INSERT INTO event_logs"), anyMap());
+        assertThat(savedCount).isEqualTo(events.size());
+        verify(jdbcTemplate, times(events.size())).update(contains("INSERT INTO event_logs"), anyMap());
         verify(jdbcTemplate, times(countDetails(events, EventDetail.Lecture.class)))
                 .update(contains("INSERT INTO lecture_event_details"), anyMap());
         verify(jdbcTemplate, times(countDetails(events, EventDetail.VideoError.class)))
@@ -38,7 +38,7 @@ class JdbcEventLogStoreTests {
     @SuppressWarnings({"unchecked", "rawtypes"})
     void storesEnvelopeFieldsAsSeparatedColumns() {
         when(jdbcTemplate.update(org.mockito.ArgumentMatchers.anyString(), anyMap())).thenReturn(1);
-        var event = new EventGenerator().generate(1, new Random(20260615L)).getFirst();
+        var event = new EventGenerator().generate(1, 5, new Random(20260615L)).getFirst();
 
         store.saveAll(List.of(event));
 

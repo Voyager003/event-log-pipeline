@@ -40,7 +40,7 @@
     },
     {
       "id": 2,
-      "title": "Lecture Events by Hour",
+      "title": "Playback Heartbeats by Hour",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 18, "x": 6, "y": 0 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
@@ -48,7 +48,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", e.event_type AS metric, COUNT(*) AS value FROM event_logs e WHERE e.event_type IN ('lecture_started', 'lecture_played', 'lecture_completed') GROUP BY 1, 2 ORDER BY 1, 2;"
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", COUNT(*) AS playback_heartbeat_count FROM event_logs e WHERE e.event_type = 'lecture_playback_heartbeat' GROUP BY 1 ORDER BY 1;"
         }
       ],
       "fieldConfig": {
@@ -77,7 +77,7 @@
     },
     {
       "id": 3,
-      "title": "Active Sessions by Hour",
+      "title": "Active Lecture Sessions by Hour",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
       "datasource": { "type": "postgres", "uid": "event-log-postgres" },
@@ -85,7 +85,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", COUNT(DISTINCT e.session_id) AS active_session_count, COUNT(DISTINCT e.user_id) AS active_user_count FROM event_logs e WHERE e.event_type IN ('lecture_started', 'lecture_played', 'lecture_completed') GROUP BY 1 ORDER BY 1;"
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", COUNT(DISTINCT e.session_id) AS active_lecture_session_count, COUNT(DISTINCT e.user_id) AS active_lecture_user_count FROM event_logs e WHERE e.event_type = 'lecture_playback_heartbeat' GROUP BY 1 ORDER BY 1;"
         }
       ],
       "fieldConfig": {
@@ -121,7 +121,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", ROUND(COUNT(*) FILTER (WHERE e.event_type = 'video_error_occurred')::numeric / NULLIF(COUNT(*), 0) * 100, 2) AS error_rate FROM event_logs e GROUP BY 1 ORDER BY 1;"
+          "rawSql": "SELECT date_trunc('hour', e.occurred_at) AS \"time\", ROUND(COUNT(*) FILTER (WHERE e.event_type = 'video_error_occurred')::numeric / NULLIF(COUNT(*) FILTER (WHERE e.event_type = 'lecture_playback_heartbeat'), 0) * 100, 2) AS error_rate FROM event_logs e WHERE e.event_type IN ('lecture_playback_heartbeat', 'video_error_occurred') GROUP BY 1 ORDER BY 1;"
         }
       ],
       "fieldConfig": {

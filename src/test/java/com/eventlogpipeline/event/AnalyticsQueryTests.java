@@ -35,15 +35,13 @@ class AnalyticsQueryTests {
     }
 
     @Test
-    void hourlyLectureTrendQueryAggregatesLectureEventsByHour() throws IOException {
+    void hourlyLectureTrendQueryAggregatesPlaybackHeartbeatsByHour() throws IOException {
         String sql = readSql("analytics/hourly_lecture_event_trends.sql");
 
         assertThat(sql)
                 .contains("date_trunc('hour'")
-                .contains("lecture_started")
-                .contains("lecture_played")
-                .contains("lecture_completed")
-                .contains("event_count");
+                .contains("lecture_playback_heartbeat")
+                .contains("playback_heartbeat_count");
     }
 
     @Test
@@ -52,8 +50,9 @@ class AnalyticsQueryTests {
 
         assertThat(sql)
                 .contains("COUNT(DISTINCT e.session_id)")
-                .contains("active_session_count")
-                .contains("active_user_count");
+                .contains("active_lecture_session_count")
+                .contains("active_lecture_user_count")
+                .contains("lecture_playback_heartbeat");
     }
 
     @Test
@@ -61,6 +60,7 @@ class AnalyticsQueryTests {
         String sql = readSql("analytics/hourly_video_error_rate.sql");
 
         assertThat(sql)
+                .contains("lecture_playback_heartbeat")
                 .contains("video_error_occurred")
                 .contains("error_event_count")
                 .contains("error_rate");
